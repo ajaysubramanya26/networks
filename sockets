@@ -1,0 +1,120 @@
+import socket
+import operator
+import sys
+import ssl
+
+#METHOD
+#client : creates a socket, exchanges data with the server that is provided to it
+
+#ARGUMENTS
+#port-int : if SSL then 27994 else 27993.Specfies which port of the server we
+#           need to communicate
+#isSSL-boolean : specfies if we are going to use a SSL or a non SSL channel of
+#                communication with the server
+#hostName-string : specfies the host or the server that we have to connect to
+#nuId-int : it is the NU id that is used for auth purposes. passed as an int but
+#           converted to a string while sending to the server
+def client(port,isSSL,hostName,nuId):
+        #iMsg-String : Initial message that has to be sent to the server in order
+        #              to obtain the expression for evaluation
+        iMsg = "cs5700spring2015 HELLO"+" "+str(nuId)+" "+"\n"
+        # creating a socket object
+        s = socket.socket()
+        if isSSL:
+                #wrapping the socket for secure SSL communication
+                sock = ssl.wrap_socket(s)
+                sock.connect((hostName,port))
+                sock.send(iMsg)
+        else:
+                #communicating with out SSL
+                s.connect((hostName,port))
+                s.send(iMsg)
+
+        # running the loop forever . No kidding ... just until we receieve BYE
+        while(1):
+                #receiving the data from the server
+
+                # if SSL receieve using wrapped socket else regular
+                if isSSL:
+                        retData =  sock.recv(1024)
+                else:
+                        retData = s.recv(1024)
+
+                #print "The recv data :",retData
+
+                #return processing
+                #checking if the returned message has the STATUS flag
+				#if it does not then print the secret flag
+                if retData.find("cs5700spring2015 STATUS") == -1:
+                        # Meh... Seems like the server sent something that was not expected
+                        if retData.find("BYE")== -1:
+                                print "Server returned something that was not reconginsed"
+                                break;
+
+                        # Yeah... we got the secret
+                        else:
+                                print "The recv data :",retData
+                                print retData[17:len(retData)-4]
+                                break
+                else:
+                        #control would flow through this part of the code if we have got the expression to evaluate
+                        #stripping the returned data off to obtain the expression to evaluate
+                        tData = retData[24:]
+                        opIndx = -1
+                        for i in range (len(tData)):
+                                if tData[i] == '+' or  tData[i] == '-' or  tData[i] == '*' or  tData[i] == '/':
+                                        opIndx = i
+                                        break
+                        #if we have not received any operators then we exit the program
+                        if opIndx == -1:
+                                print "None of the operators(+,-,/,*) that was agreeed upon was returned from the server"
+                                return
+                        #the operator
+                        optr = tData[opIndx]
+                        #the two operands
+                        opnd1 = tData[:opIndx]
+                        opnd2 = tData[opIndx+1:]
+                        #a dictionary to hold the possible operators
+                        ops = { "+": operator.add, "-": operator.sub,"*": operator.mul,"/": operator.div}
+                        #this is the string that we are going to return to the server
+                        retStr = "cs5700spring2015"+" "+str(int(ops[optr](int (opnd1),int (opnd2))))+" "+"\n"
+                # if SSL send using wrapped socket else regular
+                if isSSL:
+                        sock.send(str(retStr))
+                else:
+                        s.send(str(retStr))
+
+#METHOD
+#main : This is the method where all of the preprosessing happens prior to
+#       invoking the client method
+def main():
+        #storing the number of args in numArgs
+        numArgs = len(sys.argv)
+		 #Validation : if the number of args is grater than 6 then exit the program
+        if(numArgs>6):
+                print "Usage : $ ./client <-p port> <-s> [hostname] [NEU ID]"
+                return
+        #defaulting the port number  27993
+        pNum = 27993
+        #if an differnt port number is submitted then use that
+        for i in range(numArgs):
+                if '-p' ==  sys.argv[i]:
+                        pNum = int(sys.argv[i+1])
+        #defaulting SSL to false
+        isSSL = False
+        #if SSL is supplied in the command line argument then set it to TRUE
+        if '-s' in sys.argv:
+                isSSL = True
+                # if -s is given but port is not supplied then we default it to 27994
+                pNum = 27994
+
+        #the last but second argument is always the host name
+        hName = sys.argv[numArgs-2]
+        #the last argument is always the NU ID
+        nId = sys.argv[numArgs-1]
+        #invoking the create socket method
+        client(pNum,isSSL,hName,nId)
+
+#invoking the main method
+main()
+
